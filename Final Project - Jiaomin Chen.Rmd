@@ -1,0 +1,191 @@
+---
+title: 'ANLY 510 Final Project - Jiaomin Chen'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+__variables__
+
+1. population
+2. medIncome
+3. blackPerCap
+4. PolicAveOTWorked
+5. PctNotHSGrad
+6. PctEmploy
+7. State
+8. ViolentCrimesPerPop
+
+
+__Histograms__
+
+```{r}
+library(ggplot2)
+data <- read.csv("crimedata.csv", na.strings = "?")
+str(data)
+p <- ggplot(data, aes(ViolentCrimesPerPop)) + geom_histogram()
+p
+```
+
+we can find the histogram of ViolentCrimesPerPop shows a right-skewed distribution, not symmetric.
+
+__scatter plot matrix__
+
+```{r}
+
+data2 <- data[ ,c("state","population","medIncome","blackPerCap","PolicAveOTWorked","PctNotHSGrad","PctEmploy","ViolentCrimesPerPop")]
+library(GGally)
+ggpairs(data2[,-1])
+```
+
+appear some clear relations among the predictors with dependent variable  ViolentCrimesPerPop. Among these variables, MedIncome, PctNotHSGrad, and PctEmploy have the highest correlation with ViolentCrimesPerPop.
+
+
+__Facet scatter plot__
+
+```{r}
+library(dplyr)
+data2 <- mutate(data2, medIncomeLevels = cut(medIncome, quantile(medIncome, c(0, 1/3, 2/3,1)),
+                                             labels = c("low","middle","high")))
+data3 <- subset(data2, !is.na(medIncomeLevels))
+p1 <- ggplot(data3, aes(PctNotHSGrad, ViolentCrimesPerPop)) + geom_point() + geom_smooth(method = "lm") 
+p1 <- p1 + facet_wrap( ~  medIncomeLevels)
+p1
+
+```
+
+```{r}
+data2 <- mutate(data2, medIncomeLevels = cut(medIncome, quantile(medIncome, c(0, 1/3, 2/3,1)),
+                                             labels = c("low","middle","high")))
+data3 <- subset(data2, !is.na(medIncomeLevels))
+
+p2 <- ggplot(data3, aes(PctEmploy, ViolentCrimesPerPop)) + geom_point() + geom_smooth(method = "lm") 
+p2 <- p2 + facet_wrap( ~  medIncomeLevels)
+
+p2
+
+data2$medIncomeLevels <- NULL
+```
+
+The positive relations among the PctNotHSGrad and ViolentCrimesPerPop appear to be consistent in the low and middle income levels, the slopes of the lines are close, however, the line of high income level appears so much flatter. This implies that higher income level population is more relectant to commit violent crime even though they may not graduated from high school. For PctEmpoly,  the PctEmploy and ViolentCrimesPerPop plot also shows largest difference when it comes to high income level. Hige income level has lowest slope.
+
+```{r}
+par(mfrow = c(2,2))
+with(data2, {
+  plot(ViolentCrimesPerPop, PctNotHSGrad )
+  lines(loess.smooth(ViolentCrimesPerPop, PctNotHSGrad, lwd = 3, col = "blue"))
+  plot(ViolentCrimesPerPop, medIncome )
+  lines(loess.smooth(ViolentCrimesPerPop, medIncome, lwd = 3, col = "blue"))
+  plot(ViolentCrimesPerPop, PctEmploy  )
+  lines(loess.smooth(ViolentCrimesPerPop, PctEmploy , lwd = 3, col = "blue"))
+  plot(ViolentCrimesPerPop, blackPerCap)
+  lines(loess.smooth(ViolentCrimesPerPop, blackPerCap, lwd = 3, col = "blue"))
+})
+```
+
+Also, we can use loess to show relations which might be better than using linear straight line. 
+
+__correlation coefficient__
+
+```{r}
+library(corrgram)
+corrgram(data2[,-1], lower.panel = panel.shade, upper.panel = panel.conf)
+```
+
+The correlations are not low for the  predictors. The strongest negative correlation appears to be MedIncome & PctNotHSGrad, PctNotHSGrad & PctEmploy; the strongest positive correlation appears to be PctNotHSGrad & ViolentCrimePerPop, PctEmploy & MedIncome. 
+
+
+```{r}
+library(psych)
+corr.test( data2[,c(2:8)],alpha=.05,adjust="none") 
+```
+
+Also, we can use correlation test to confirm the correlations with ViolentCrimesPerPop, we can see only PolicAveOTWorked  shows a larger p value, all of other variables show p values lower than 0.05 that the correlations are significant.
+
+__heat map__
+
+
+```{r}
+
+data3 <- data.frame( state = levels(data2$state))
+for(i in 1:(ncol(data2)-1)) {
+  print(i)
+  temp <- aggregate(data2[,i+1] ~ state, data = data2, mean, na.rm = TRUE)
+  colnames(temp)[2] <- colnames(data2)[i+1]
+  data3 <- merge(data3, temp, by= "state")
+  
+}
+data4 <- data3[,-1]
+rownames(data4) <- data3[,1]
+data4 <- scale(as.matrix(data4))
+library(pheatmap)
+pheatmap(data4)
+```
+
+
+
+it appears that there is no much significant different across the states, there is no  obviously high red color region. 
+
+
+__cluster__
+
+```{r}
+library("factoextra")
+d <- dist(data2[,-1])
+fit <- hclust(d,method="ward.D")
+fviz_nbclust(data2[,-1], FUN=hcut, method="wss")
+par(mfrow = c(1,1))
+plot(fit)
+griyos <- cutree(fit,k=4)
+rect.hclust(fit, k=4)
+```
+
+The above shows the optimal number of clusters and plot for clusters with a number of 4.
+
+__Principal Components Analysis__
+
+```{r}
+p = princomp(na.omit(data2[,-1]),cor=T)
+p$loadings
+summary(p)
+```
+
+The medIncome dominate 1st PC, population dominate 2nd and 3rd PC.
+
+```{r}
+plot(p)
+```
+
+The above barplot shows that the first PC occupys a large proportion of variance, and we can see from the summary table that the first 4 PCs can explain about 84% variance in total, so we can use these 4 PCs to perform regression:
+
+```{r}
+dff <- data.frame(ViolentCrimesPerPop = na.omit(data2[,-1])[,"ViolentCrimesPerPop"], p$scores)
+PCR <- lm(ViolentCrimesPerPop ~ Comp.1 +  Comp.2  +  Comp.3 +  Comp.4, data = dff)
+summary(PCR)
+```
+
+The summary output shows that all of the 4 PCs are significant in the PC regression above, so they have significant effects on the ViolentCrimesPerPop at 0.05 level.
+
+__Transformations__
+
+```{r}
+ggplot(data2, aes(medIncome,  ViolentCrimesPerPop)) +  geom_point() 
+ggplot(data2, aes(log(medIncome),  ViolentCrimesPerPop)) +  geom_point() 
+ggplot(data2, aes(log(medIncome),  log(ViolentCrimesPerPop))) +  geom_point() 
+ggplot(data2, aes(population,  ViolentCrimesPerPop)) +  geom_point()
+ggplot(data2, aes(log(population),  ViolentCrimesPerPop)) +  geom_point() 
+ggplot(data2, aes(log(population),  log(ViolentCrimesPerPop))) +  geom_point() 
+```
+
+It can be seen that using a log-log transformation on MedIncome and ViolentCrimesPerPop, there is a very clear linear relationship, so we build the model
+
+```{r}
+mod <- lm(log(ViolentCrimesPerPop) ~ log(medIncome), data = data2[-which(data2$ViolentCrimesPerPop <=0), ])
+summary(mod)
+```
+
+
+
